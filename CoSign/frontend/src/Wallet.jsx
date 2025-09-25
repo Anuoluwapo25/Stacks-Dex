@@ -1,0 +1,171 @@
+import { useState, useEffect, useCallback } from 'react';
+import { ethers } from 'ethers';
+
+const useWallet = () => {
+  const [account, setAccount] = useState('');
+  const [provider, setProvider] = useState(null);
+  const [signer, setSigner] = useState(null);
+  const [isConnected, setIsConnected] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [chainId, setChainId] = useState(null);
+
+  const checkConnection = useCallback(async () => {
+    try {
+      if (window.ethereum) {
+        const provider = new ethers.providers.Web3Provider(window.ethereum);
+        const accounts = await provider.listAccounts();
+        
+        if (accounts.length > 0) {
+          const signer = provider.getSigner();
+          const network = await provider.getNetwork();
+          
+          setProvider(provider);
+          setSigner(signer);
+          setAccount(accounts[0]);
+          setChainId(network.chainId);
+          setIsConnected(true);
+        }
+      }
+    } catch (err) {
+      console.error('Error checking connection:', err);
+      setError(err.message);
+    }
+  }, []);
+
+  const connectWallet = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      setError('');
+
+      if (!window.ethereum) {
+        throw new Error('Please install MetaMask or another Web3 wallet');
+      }
+
+      await window.ethereum.request({ method: 'eth_requestAccounts' });
+      
+      const provider = new ethers.providers.Web3Provider(window.ethereum);
+      const signer = provider.getSigner();
+      const address = await signer.getAddress();
+      const network = await provider.getNetwork();
+
+      setProvider(provider);
+      setSigner(signer);
+      setAccount(address);
+      setChainId(network.chainId);
+      setIsConnected(true);
+
+      localStorage.setItem('walletConnected', 'true');
+
+    } catch (err) {
+      console.error('Error connecting wallet:', err);
+      setError(err.message);
+      setIsConnected(false);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const disconnectWallet = useCallback(() => {
+    setAccount('');
+    setProvider(null);
+    setSigner(null);
+    setIsConnected(false);
+    setChainId(null);
+    setError('');
+    localStorage.removeItem('walletConnected');
+  }, []);
+
+  const switchNetwork = useCallback(async (targetChainId) => {
+    try {
+      if (!window.ethereum) throw new Error('No wallet found');
+      
+      const chainIdHex = '0x' + targetChainId.toString(16);
+      
+      await window.ethereum.request({
+        method: 'wallet_switchEthereumChain',
+        params: [{ chainId: chainIdHex }],
+      });
+    } catch (err) {
+      console.error('Error switching network:', err);
+      throw err;
+    }
+  }, []);
+
+  useEffect(() => {
+    const handleAccountsChanged = (accounts) => {
+      if (accounts.length === 0) {
+        disconnectWallet();
+      } else if (accounts[0] !== account) {
+        setAccount(accounts[0]);
+      }
+    };
+
+    const handleChainChanged = (chainId) => {
+      setChainId(parseInt(chainId, 16));
+      window.location.reload();
+    };
+
+    const handleDisconnect = () => {
+      disconnectWallet();
+    };
+
+    if (window.ethereum) {
+      window.ethereum.on('accountsChanged', handleAccountsChanged);
+      window.ethereum.on('chainChanged', handleChainChanged);
+      window.ethereum.on('disconnect', handleDisconnect);
+
+      return () => {
+        window.ethereum.removeListener('accountsChanged', handleAccountsChanged);
+        window.ethereum.removeListener('chainChanged', handleChainChanged);
+        window.ethereum.removeListener('disconnect', handleDisconnect);
+      };
+    }
+  }, [account, disconnectWallet]);
+
+  useEffect(() => {
+    const wasConnected = localStorage.getItem('walletConnected') === 'true';
+    if (wasConnected) {
+      checkConnection();
+    }
+  }, [checkConnection]);
+
+  const formatAddress = useCallback((address) => {
+    if (!address) return '';
+    return `${address.slice(0, 6)}...${address.slice(-4)}`;
+  }, []);
+
+  const getNetworkName = useCallback((chainId) => {
+    const networks = {
+      1: 'Ethereum Mainnet',
+      3: 'Ropsten Testnet',
+      4: 'Rinkeby Testnet',
+      5: 'Goerli Testnet',
+      42: 'Kovan Testnet',
+      137: 'Polygon Mainnet',
+      80001: 'Polygon Mumbai',
+      56: 'BSC Mainnet',
+      97: 'BSC Testnet',
+    };
+    return networks[chainId] || `Unknown Network (${chainId})`;
+  }, []);
+
+  return {
+    account,
+    provider,
+    signer,
+    isConnected,
+    isLoading,
+    error,
+    chainId,
+    
+    connectWallet,
+    disconnectWallet,
+    switchNetwork,
+    
+    formatAddress,
+    getNetworkName: () => getNetworkName(chainId),
+  };
+};
+
+export default useWallet;
