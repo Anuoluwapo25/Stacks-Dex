@@ -1,4 +1,4 @@
-# TaskBounty 🎯
+# TaskBounty 
 
 > **Decentralized Task Marketplace on Arbitrum**  
 > Create tasks, earn bounties, build reputation - all powered by smart contracts
@@ -10,7 +10,7 @@
 
 **TaskBounty** transforms how work gets done on the blockchain. Post tasks with ETH bounties, complete work for others, and build your on-chain reputation - all with guaranteed payments and dispute protection.
 
-## 🚀 Quick Start
+## Quick Start
 
 ```bash
 # Clone the repository
@@ -27,30 +27,30 @@ cargo stylus build
 cargo stylus deploy --endpoint https://sepolia-rollup.arbitrum.io/rpc
 ```
 
-## ✨ What Makes TaskBounty Special?
+## What Makes TaskBounty Special?
 
-- **🔒 Trustless Escrow**: Your ETH is safe until work is completed
-- **⚡ Built with Stylus**: 10x cheaper gas costs, blazing fast execution
-- **🛡️ Dispute Protection**: 24-hour dispute window protects both parties  
-- **📊 On-Chain Reputation**: Build credibility with completed task history
-- **⏰ Smart Deadlines**: Automatic deadline enforcement and payment release
-- **🎯 Zero Vendor Lock-in**: Truly decentralized, no platform can shut you down
+- **Trustless Escrow**: Your ETH is safe until work is completed
+- **Built with Stylus**: 10x cheaper gas costs, blazing fast execution
+- **Dispute Protection**: 24-hour dispute window protects both parties  
+- **On-Chain Reputation**: Build credibility with completed task history
+- **Smart Deadlines**: Automatic deadline enforcement and payment release
+- **Zero Vendor Lock-in**: Truly decentralized, no platform can shut you down
 
-## 🎮 How It Works
+## How It Works
 
-### For Task Creators 📋
+### For Task Creators 
 1. **Post a Task**: Title, description, deadline, and bounty in ETH
 2. **Wait for Acceptance**: Workers can claim your open tasks
 3. **Review & Pay**: Approve completed work or raise disputes
 4. **Build Network**: Attract quality workers with good task history
 
-### For Task Workers 💼  
+### For Task Workers  
 1. **Browse Tasks**: Find work that matches your skills
 2. **Accept & Deliver**: Claim tasks and submit completed work
 3. **Get Paid**: Automatic payment after approval or dispute window
 4. **Build Reputation**: Showcase your completed task portfolio
 
-## 🏗️ Architecture Overview
+## Architecture Overview
 
 ```
 TaskBounty Smart Contract
@@ -72,7 +72,7 @@ TaskBounty Smart Contract
     └── Build on-chain credibility
 ```
 
-## 🛠️ Core Functions
+## Core Functions
 
 ### Task Lifecycle
 ```rust
@@ -93,7 +93,7 @@ get_task_count()   // Total tasks on platform
 get_platform_stats() // Platform fees and stats
 ```
 
-## 💻 Development Setup
+##  Development Setup
 
 ### Prerequisites
 - **Rust** 1.70+ with `wasm32-unknown-unknown` target
@@ -127,7 +127,7 @@ cargo stylus check
 cargo stylus deploy --estimate-gas --endpoint <RPC_URL>
 ```
 
-## 🧪 Testing
+##  Testing
 
 ### Unit Tests
 ```bash
@@ -150,7 +150,7 @@ cargo stylus deploy --endpoint http://localhost:8545
 cargo stylus deploy --endpoint https://sepolia-rollup.arbitrum.io/rpc
 ```
 
-## 🚀 Deployment Guide
+## Deployment Guide
 
 ### Testnet Deployment (Arbitrum Sepolia)
 ```bash
@@ -173,13 +173,13 @@ cargo stylus deploy \
   --private-key <YOUR_PRIVATE_KEY>
 ```
 
-## 🤝 Contributing
+## Contributing
 
 We welcome all contributors! Here's how to get started:
 
 
 
-### 🔧 Ready to Code?
+### Ready to Code?
 
 #### Easy First Issues
 - [ ] Add task category system
@@ -204,7 +204,7 @@ We welcome all contributors! Here's how to get started:
 
 
 
-## 📚 Resources
+## Resources
 
 ### Documentation
 - **[Stylus Book](https://docs.arbitrum.io/stylus/)** - Official Stylus documentation
@@ -246,13 +246,13 @@ We welcome all contributors! Here's how to get started:
 - [ ] Enterprise features
 - [ ] DAO governance transition
 
-## 🆘 Support
+## Support
 
 
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 🙏 Acknowledgments
+##  Acknowledgments
 
 - **Arbitrum Team** for the amazing Stylus SDK
 - **Rust Community** for excellent tooling and docs
@@ -260,4 +260,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
-**Ready to build the future of work?** 🚀  
+**Ready to build the future of work?**  
