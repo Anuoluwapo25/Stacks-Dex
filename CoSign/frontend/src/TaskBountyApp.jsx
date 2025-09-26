@@ -16,13 +16,17 @@ import {
   FileText,
   Settings,
   ExternalLink,
-  Loader2
+  Loader2,
+  RefreshCw
 } from 'lucide-react';
 import useWallet from './Wallet';
+import taskBountyService from './TaskBountyService';
 
 const TaskBountyApp = () => {
   const {
     account,
+    provider,
+    signer,
     isConnected,
     isLoading: walletLoading,
     error: walletError,
@@ -37,8 +41,9 @@ const TaskBountyApp = () => {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(false);
   const [userStats, setUserStats] = useState({ completed: 0, created: 0, earned: 0 });
+  const [platformStats, setPlatformStats] = useState({ fee: 0, owner: '', balance: '0' });
+  const [taskCount, setTaskCount] = useState(0);
 
-  // Form states
   const [newTask, setNewTask] = useState({
     title: '',
     description: '',
@@ -49,53 +54,54 @@ const TaskBountyApp = () => {
   const [filterStatus, setFilterStatus] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
 
-  // Mock data for demonstration
-  const mockTasks = [
-    {
-      id: 1,
-      title: "Build a React Component Library",
-      description: "Create a comprehensive React component library with TypeScript support, Storybook documentation, and testing suite. Must include at least 20 common UI components.",
-      bounty: "2.5",
-      creator: "0x742d35Cc6646Bc2D8C2bd28Dc5B98f78421af5E2",
-      assignee: null,
-      status: 0, // Open
-      deadline: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-      createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
-      tags: ['React', 'TypeScript', 'Frontend']
-    },
-    {
-      id: 2,
-      title: "Smart Contract Security Audit",
-      description: "Perform comprehensive security audit on DeFi protocol smart contracts. Must include formal report with vulnerability assessment and recommendations.",
-      bounty: "5.0",
-      creator: "0x8ba1f109551bD432803012645Hac136c69",
-      assignee: "0x1234567890123456789012345678901234567890",
-      status: 1, // In Progress
-      deadline: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000),
-      createdAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
-      tags: ['Solidity', 'Security', 'DeFi']
-    },
-    {
-      id: 3,
-      title: "NFT Marketplace Frontend Development",
-      description: "Design and develop a modern, responsive NFT marketplace interface with wallet integration, search functionality, and trading features.",
-      bounty: "3.8",
-      creator: "0x5555666677778888999900001111222233334444",
-      assignee: "0x7777888899990000111122223333444455556666",
-      status: 2, // Completed
-      deadline: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
-      createdAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000),
-      tags: ['React', 'Web3', 'NFT']
-    }
-  ];
-
+  // Initialize contract service when wallet connects
   useEffect(() => {
-    setTasks(mockTasks);
-    if (isConnected) {
-      setUserStats({ completed: 12, created: 8, earned: 24.7 });
+    if (isConnected && provider && signer) {
+      taskBountyService.initialize(provider, signer);
+      loadAllData();
     }
-  }, [isConnected]);
+  }, [isConnected, provider, signer]);
 
+  // Load all contract data
+  const loadAllData = async () => {
+    if (!isConnected) return;
+
+    try {
+      setLoading(true);
+      
+      // Load tasks, user stats, and platform stats concurrently
+      const [allTasks, userStatsData, platformStatsData, count] = await Promise.all([
+        taskBountyService.getAllTasks(),
+        taskBountyService.getUserStats(account),
+        taskBountyService.getPlatformStats(),
+        taskBountyService.getTaskCount()
+      ]);
+
+      // Process tasks to add title and description from hashes
+      // Note: In a real app, you'd want to store title/description off-chain 
+      // or implement a mapping system
+      const processedTasks = allTasks.map(task => ({
+        ...task,
+        title: `Task #${task.id}`, // Placeholder - you'll need to implement title retrieval
+        description: 'Task description...', // Placeholder
+        createdAt: new Date(Date.now() - Math.random() * 7 * 24 * 60 * 60 * 1000), // Mock creation date
+        tags: [] // You'd implement tags separately
+      }));
+
+      setTasks(processedTasks);
+      setUserStats(userStatsData);
+      setPlatformStats(platformStatsData);
+      setTaskCount(count);
+
+    } catch (error) {
+      console.error('Error loading contract data:', error);
+      setError('Failed to load contract data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Create a new task
   const createTask = async (e) => {
     if (e) e.preventDefault();
     if (!isConnected) {
@@ -110,35 +116,31 @@ const TaskBountyApp = () => {
 
     setLoading(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      const result = await taskBountyService.createTask(
+        newTask.title,
+        newTask.description,
+        newTask.deadline,
+        newTask.bounty
+      );
 
-      const newTaskData = {
-        id: tasks.length + 1,
-        title: newTask.title,
-        description: newTask.description,
-        bounty: newTask.bounty,
-        creator: account,
-        assignee: null,
-        status: 0,
-        deadline: new Date(Date.now() + newTask.deadline * 60 * 60 * 1000),
-        createdAt: new Date(),
-        tags: []
-      };
-
-      setTasks([newTaskData, ...tasks]);
+      console.log('Task created:', result);
+      
+      // Reset form
       setNewTask({ title: '', description: '', bounty: '', deadline: 24 });
       setActiveTab('browse');
       
-      setUserStats(prev => ({ ...prev, created: prev.created + 1 }));
+      // Reload data
+      await loadAllData();
 
     } catch (error) {
       console.error('Error creating task:', error);
-      alert('Failed to create task. Please try again.');
+      alert(`Failed to create task: ${error.message}`);
     } finally {
       setLoading(false);
     }
   };
 
+  // Accept a task
   const acceptTask = async (taskId) => {
     if (!isConnected) {
       alert('Please connect your wallet first');
@@ -147,43 +149,57 @@ const TaskBountyApp = () => {
 
     setLoading(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      setTasks(tasks.map(task => 
-        task.id === taskId 
-          ? { ...task, assignee: account, status: 1 }
-          : task
-      ));
+      await taskBountyService.acceptTask(taskId);
+      await loadAllData(); // Reload to get updated task status
     } catch (error) {
       console.error('Error accepting task:', error);
-      alert('Failed to accept task. Please try again.');
+      alert(`Failed to accept task: ${error.message}`);
     } finally {
       setLoading(false);
     }
   };
 
+  // Submit completed task
   const submitTask = async (taskId) => {
     setLoading(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      setTasks(tasks.map(task => 
-        task.id === taskId 
-          ? { ...task, status: 2 }
-          : task
-      ));
-
-      const task = tasks.find(t => t.id === taskId);
-      if (task) {
-        setUserStats(prev => ({ 
-          ...prev, 
-          completed: prev.completed + 1,
-          earned: prev.earned + parseFloat(task.bounty)
-        }));
-      }
+      await taskBountyService.submitTask(taskId);
+      await loadAllData(); // Reload to get updated task status
     } catch (error) {
       console.error('Error submitting task:', error);
-      alert('Failed to submit task. Please try again.');
+      alert(`Failed to submit task: ${error.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Approve and pay for task (creator only)
+  const approveAndPay = async (taskId) => {
+    setLoading(true);
+    try {
+      await taskBountyService.approveAndPay(taskId);
+      await loadAllData();
+    } catch (error) {
+      console.error('Error approving task:', error);
+      alert(`Failed to approve task: ${error.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Cancel task (creator only)
+  const cancelTask = async (taskId) => {
+    if (!confirm('Are you sure you want to cancel this task? The bounty will be refunded.')) {
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await taskBountyService.cancelTask(taskId);
+      await loadAllData();
+    } catch (error) {
+      console.error('Error canceling task:', error);
+      alert(`Failed to cancel task: ${error.message}`);
     } finally {
       setLoading(false);
     }
@@ -206,13 +222,13 @@ const TaskBountyApp = () => {
     return matchesSearch && matchesFilter;
   });
 
-  const formatDate = (date) => {
+  const formatDate = (timestamp) => {
     return new Intl.DateTimeFormat('en-US', {
       month: 'short',
       day: 'numeric',
       hour: '2-digit',
       minute: '2-digit'
-    }).format(new Date(date));
+    }).format(new Date(timestamp));
   };
 
   const getTimeRemaining = (deadline) => {
@@ -239,23 +255,37 @@ const TaskBountyApp = () => {
               <div>
                 <h1 className="text-3xl font-bold text-white">TaskBounty</h1>
                 <p className="text-white/80">Decentralized Task Marketplace</p>
+                <p className="text-white/60 text-sm">
+                  {taskCount} total tasks • {platformStats.balance} ETH in platform
+                </p>
               </div>
             </div>
 
             <div className="flex items-center space-x-4">
               {isConnected && (
-                <div className="bg-white/20 backdrop-blur-lg rounded-xl px-4 py-2">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-3 h-3 bg-green-400 rounded-full"></div>
-                    <div className="flex flex-col">
-                      <span className="text-white font-medium">{formatAddress(account)}</span>
-                      <span className="text-white/60 text-xs">{getNetworkName()}</span>
-                    </div>
-                    <div className="text-white/80 text-sm">
-                      {userStats.completed} completed | {userStats.created} created
+                <>
+                  <button
+                    onClick={loadAllData}
+                    disabled={loading}
+                    className="bg-white/20 hover:bg-white/30 p-2 rounded-xl text-white transition-all duration-300 disabled:opacity-50"
+                    title="Refresh data"
+                  >
+                    <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
+                  </button>
+                  
+                  <div className="bg-white/20 backdrop-blur-lg rounded-xl px-4 py-2">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-3 h-3 bg-green-400 rounded-full"></div>
+                      <div className="flex flex-col">
+                        <span className="text-white font-medium">{formatAddress(account)}</span>
+                        <span className="text-white/60 text-xs">{getNetworkName()}</span>
+                      </div>
+                      <div className="text-white/80 text-sm">
+                        {userStats.completed} completed | {userStats.created} created
+                      </div>
                     </div>
                   </div>
-                </div>
+                </>
               )}
               
               {walletError && (
@@ -314,6 +344,29 @@ const TaskBountyApp = () => {
           </div>
         </div>
 
+        {/* Contract Connection Warning */}
+        {isConnected && taskCount === 0 && !loading && (
+          <div className="bg-yellow-500/20 backdrop-blur-lg rounded-xl p-6 mb-8 border border-yellow-400/30">
+            <div className="flex items-center space-x-3">
+              <AlertCircle className="w-6 h-6 text-yellow-300" />
+              <div>
+                <h3 className="text-yellow-100 font-semibold">Contract Not Deployed or Configured</h3>
+                <p className="text-yellow-200/80 text-sm mt-1">
+                  Make sure to update the CONTRACT_ADDRESS in TaskBountyService.js with your deployed contract address.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Loading State */}
+        {loading && (
+          <div className="text-center py-12">
+            <Loader2 className="w-12 h-12 text-white animate-spin mx-auto mb-4" />
+            <p className="text-white/80">Loading contract data...</p>
+          </div>
+        )}
+
         {/* Browse Tasks Tab */}
         {activeTab === 'browse' && (
           <div className="space-y-6">
@@ -351,10 +404,12 @@ const TaskBountyApp = () => {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {filteredTasks.map(task => {
                 const statusInfo = getStatusInfo(task.status);
-                const isMyTask = task.creator === account;
-                const isAssignedToMe = task.assignee === account;
-                const canAccept = task.status === 0 && !isMyTask && isConnected;
+                const isMyTask = task.creator?.toLowerCase() === account?.toLowerCase();
+                const isAssignedToMe = task.assignee?.toLowerCase() === account?.toLowerCase();
+                const canAccept = task.status === 0 && !isMyTask && isConnected && task.assignee === '0x0000000000000000000000000000000000000000';
                 const canSubmit = task.status === 1 && isAssignedToMe;
+                const canApprove = task.status === 2 && isMyTask;
+                const canCancel = task.status === 0 && isMyTask;
                 const timeRemaining = getTimeRemaining(task.deadline);
 
                 return (
@@ -388,7 +443,7 @@ const TaskBountyApp = () => {
                           <User className="w-4 h-4" />
                           <span>Creator: {formatAddress(task.creator)}</span>
                         </div>
-                        {task.assignee && (
+                        {task.assignee && task.assignee !== '0x0000000000000000000000000000000000000000' && (
                           <div className="flex items-center space-x-2">
                             <CheckCircle className="w-4 h-4 text-blue-500" />
                             <span>Assignee: {formatAddress(task.assignee)}</span>
@@ -397,7 +452,7 @@ const TaskBountyApp = () => {
                       </div>
 
                       <div className="text-xs text-gray-500">
-                        Created: {formatDate(task.createdAt)} • Deadline: {formatDate(task.deadline)}
+                        Task ID: #{task.id} • Deadline: {formatDate(task.deadline)}
                       </div>
                     </div>
 
@@ -424,14 +479,36 @@ const TaskBountyApp = () => {
                         </button>
                       )}
 
-                      {isMyTask && (
+                      {canApprove && (
+                        <button
+                          onClick={() => approveAndPay(task.id)}
+                          disabled={loading}
+                          className="flex-1 bg-gradient-to-r from-blue-500 to-cyan-600 hover:from-blue-600 hover:to-cyan-700 text-white font-semibold py-3 px-4 rounded-xl transition-all duration-300 disabled:opacity-50 flex items-center justify-center space-x-2"
+                        >
+                          {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <DollarSign className="w-4 h-4" />}
+                          <span>Approve & Pay</span>
+                        </button>
+                      )}
+
+                      {canCancel && (
+                        <button
+                          onClick={() => cancelTask(task.id)}
+                          disabled={loading}
+                          className="flex-1 bg-gradient-to-r from-red-500 to-pink-600 hover:from-red-600 hover:to-pink-700 text-white font-semibold py-3 px-4 rounded-xl transition-all duration-300 disabled:opacity-50 flex items-center justify-center space-x-2"
+                        >
+                          {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />}
+                          <span>Cancel</span>
+                        </button>
+                      )}
+
+                      {isMyTask && !canCancel && !canApprove && (
                         <div className="flex-1 flex items-center justify-center text-indigo-600 font-semibold bg-indigo-50 rounded-xl py-3">
                           <Star className="w-4 h-4 mr-2" />
                           Your Task
                         </div>
                       )}
 
-                      {!canAccept && !canSubmit && !isMyTask && (
+                      {!canAccept && !canSubmit && !isMyTask && !canApprove && !canCancel && (
                         <div className="flex-1 flex items-center justify-center text-gray-500 bg-gray-50 rounded-xl py-3">
                           {task.status === 0 ? 'Available' : statusInfo.text}
                         </div>
@@ -442,7 +519,7 @@ const TaskBountyApp = () => {
               })}
             </div>
 
-            {filteredTasks.length === 0 && (
+            {filteredTasks.length === 0 && !loading && (
               <div className="text-center py-12">
                 <Search className="w-16 h-16 text-white/40 mx-auto mb-4" />
                 <h3 className="text-xl font-semibold text-white mb-2">No tasks found</h3>
@@ -533,6 +610,19 @@ const TaskBountyApp = () => {
                   </div>
                 </div>
 
+                <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                  <div className="flex items-center space-x-2 mb-2">
+                    <AlertCircle className="w-5 h-5 text-blue-600" />
+                    <span className="text-blue-800 font-medium">Important Notes:</span>
+                  </div>
+                  <ul className="text-blue-700 text-sm space-y-1 ml-7">
+                    <li>• A {platformStats.fee / 100}% platform fee will be deducted from the bounty</li>
+                    <li>• Title and description are hashed on-chain for privacy</li>
+                    <li>• Tasks cannot be edited after creation</li>
+                    <li>• You can cancel open tasks and get a full refund</li>
+                  </ul>
+                </div>
+
                 <button
                   type="submit"
                   disabled={loading || !isConnected || !newTask.title || !newTask.description || !newTask.bounty}
@@ -584,16 +674,19 @@ const TaskBountyApp = () => {
                       <div className="text-white/80 text-sm font-medium">Tasks Completed</div>
                     </div>
                     <div className="bg-white/20 rounded-xl p-6 text-center">
-                      <div className="text-4xl font-bold text-white mb-2">{userStats.earned.toFixed(1)}</div>
+                      <div className="text-4xl font-bold text-white mb-2">-</div>
                       <div className="text-white/80 text-sm font-medium">ETH Earned</div>
                     </div>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {tasks.filter(task => task.creator === account || task.assignee === account).map(task => {
+                  {tasks.filter(task => 
+                    task.creator?.toLowerCase() === account?.toLowerCase() || 
+                    task.assignee?.toLowerCase() === account?.toLowerCase()
+                  ).map(task => {
                     const statusInfo = getStatusInfo(task.status);
-                    const isCreator = task.creator === account;
+                    const isCreator = task.creator?.toLowerCase() === account?.toLowerCase();
 
                     return (
                       <div key={task.id} className="bg-white/95 backdrop-blur-lg rounded-2xl p-6 shadow-xl border border-white/20">
@@ -620,14 +713,17 @@ const TaskBountyApp = () => {
                         </div>
 
                         <div className="text-sm text-gray-500">
-                          Deadline: {formatDate(task.deadline)} • {getTimeRemaining(task.deadline)}
+                          Task ID: #{task.id} • Deadline: {formatDate(task.deadline)} • {getTimeRemaining(task.deadline)}
                         </div>
                       </div>
                     );
                   })}
                 </div>
 
-                {tasks.filter(task => task.creator === account || task.assignee === account).length === 0 && (
+                {tasks.filter(task => 
+                  task.creator?.toLowerCase() === account?.toLowerCase() || 
+                  task.assignee?.toLowerCase() === account?.toLowerCase()
+                ).length === 0 && !loading && (
                   <div className="text-center py-12">
                     <FileText className="w-16 h-16 text-white/40 mx-auto mb-4" />
                     <h3 className="text-xl font-semibold text-white mb-2">No tasks yet</h3>
@@ -664,77 +760,81 @@ const TaskBountyApp = () => {
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 <div className="text-center p-6 bg-gradient-to-br from-blue-50 to-indigo-100 rounded-xl border border-blue-200">
-                  <div className="text-4xl font-bold text-indigo-600 mb-2">156</div>
+                  <div className="text-4xl font-bold text-indigo-600 mb-2">{taskCount}</div>
                   <div className="text-gray-700 font-medium">Total Tasks</div>
-                  <div className="text-xs text-gray-500 mt-1">+12 this week</div>
+                  <div className="text-xs text-gray-500 mt-1">On-chain verified</div>
                 </div>
                 <div className="text-center p-6 bg-gradient-to-br from-green-50 to-emerald-100 rounded-xl border border-green-200">
-                  <div className="text-4xl font-bold text-green-600 mb-2">89</div>
+                  <div className="text-4xl font-bold text-green-600 mb-2">{tasks.filter(t => t.status === 2).length}</div>
                   <div className="text-gray-700 font-medium">Completed</div>
-                  <div className="text-xs text-gray-500 mt-1">57% success rate</div>
+                  <div className="text-xs text-gray-500 mt-1">{taskCount > 0 ? Math.round((tasks.filter(t => t.status === 2).length / taskCount) * 100) : 0}% success rate</div>
                 </div>
                 <div className="text-center p-6 bg-gradient-to-br from-purple-50 to-pink-100 rounded-xl border border-purple-200">
-                  <div className="text-4xl font-bold text-purple-600 mb-2">142.5</div>
-                  <div className="text-gray-700 font-medium">ETH Paid Out</div>
-                  <div className="text-xs text-gray-500 mt-1">~$285K USD</div>
+                  <div className="text-4xl font-bold text-purple-600 mb-2">{platformStats.balance}</div>
+                  <div className="text-gray-700 font-medium">ETH in Platform</div>
+                  <div className="text-xs text-gray-500 mt-1">{platformStats.fee / 100}% platform fee</div>
                 </div>
                 <div className="text-center p-6 bg-gradient-to-br from-orange-50 to-red-100 rounded-xl border border-orange-200">
-                  <div className="text-4xl font-bold text-orange-600 mb-2">2,340</div>
-                  <div className="text-gray-700 font-medium">Active Users</div>
-                  <div className="text-xs text-gray-500 mt-1">+156 this month</div>
+                  <div className="text-4xl font-bold text-orange-600 mb-2">{tasks.filter(t => t.status === 0).length}</div>
+                  <div className="text-gray-700 font-medium">Open Tasks</div>
+                  <div className="text-xs text-gray-500 mt-1">Available now</div>
                 </div>
               </div>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <div className="bg-white/95 backdrop-blur-lg rounded-2xl p-6 shadow-xl border border-white/20">
-                <h3 className="text-xl font-bold text-gray-800 mb-4">Recent Activity</h3>
+                <h3 className="text-xl font-bold text-gray-800 mb-4">Task Status Breakdown</h3>
                 <div className="space-y-3">
-                  <div className="flex items-center space-x-3 p-3 bg-green-50 rounded-xl">
-                    <CheckCircle className="w-5 h-5 text-green-600" />
-                    <div className="flex-1">
-                      <div className="font-medium text-gray-800">Task Completed</div>
-                      <div className="text-sm text-gray-600">"NFT Marketplace Frontend" - 3.8 ETH</div>
-                    </div>
-                    <div className="text-xs text-gray-500">2h ago</div>
+                  <div className="flex items-center justify-between p-3 bg-green-50 rounded-xl">
+                    <span className="font-medium text-gray-800 flex items-center">
+                      <Plus className="w-4 h-4 mr-2 text-green-600" />
+                      Open Tasks
+                    </span>
+                    <span className="text-sm text-gray-600">{tasks.filter(t => t.status === 0).length}</span>
                   </div>
-                  <div className="flex items-center space-x-3 p-3 bg-blue-50 rounded-xl">
-                    <Plus className="w-5 h-5 text-blue-600" />
-                    <div className="flex-1">
-                      <div className="font-medium text-gray-800">New Task Created</div>
-                      <div className="text-sm text-gray-600">"Mobile App Design" - 2.1 ETH</div>
-                    </div>
-                    <div className="text-xs text-gray-500">4h ago</div>
+                  <div className="flex items-center justify-between p-3 bg-blue-50 rounded-xl">
+                    <span className="font-medium text-gray-800 flex items-center">
+                      <Clock className="w-4 h-4 mr-2 text-blue-600" />
+                      In Progress
+                    </span>
+                    <span className="text-sm text-gray-600">{tasks.filter(t => t.status === 1).length}</span>
                   </div>
-                  <div className="flex items-center space-x-3 p-3 bg-purple-50 rounded-xl">
-                    <Clock className="w-5 h-5 text-purple-600" />
-                    <div className="flex-1">
-                      <div className="font-medium text-gray-800">Task Accepted</div>
-                      <div className="text-sm text-gray-600">"Smart Contract Audit" - 5.0 ETH</div>
-                    </div>
-                    <div className="text-xs text-gray-500">6h ago</div>
+                  <div className="flex items-center justify-between p-3 bg-purple-50 rounded-xl">
+                    <span className="font-medium text-gray-800 flex items-center">
+                      <CheckCircle className="w-4 h-4 mr-2 text-purple-600" />
+                      Completed
+                    </span>
+                    <span className="text-sm text-gray-600">{tasks.filter(t => t.status === 2).length}</span>
+                  </div>
+                  <div className="flex items-center justify-between p-3 bg-red-50 rounded-xl">
+                    <span className="font-medium text-gray-800 flex items-center">
+                      <AlertCircle className="w-4 h-4 mr-2 text-red-600" />
+                      Disputed
+                    </span>
+                    <span className="text-sm text-gray-600">{tasks.filter(t => t.status === 3).length}</span>
                   </div>
                 </div>
               </div>
 
               <div className="bg-white/95 backdrop-blur-lg rounded-2xl p-6 shadow-xl border border-white/20">
-                <h3 className="text-xl font-bold text-gray-800 mb-4">Top Categories</h3>
+                <h3 className="text-xl font-bold text-gray-800 mb-4">Platform Info</h3>
                 <div className="space-y-3">
                   <div className="flex justify-between items-center p-3 bg-gray-50 rounded-xl">
-                    <span className="font-medium text-gray-800">Web Development</span>
-                    <span className="text-sm text-gray-600">42 tasks</span>
+                    <span className="font-medium text-gray-800">Platform Fee</span>
+                    <span className="text-sm text-gray-600">{platformStats.fee / 100}%</span>
                   </div>
                   <div className="flex justify-between items-center p-3 bg-gray-50 rounded-xl">
-                    <span className="font-medium text-gray-800">Smart Contracts</span>
-                    <span className="text-sm text-gray-600">31 tasks</span>
+                    <span className="font-medium text-gray-800">Owner</span>
+                    <span className="text-sm text-gray-600">{formatAddress(platformStats.owner)}</span>
                   </div>
                   <div className="flex justify-between items-center p-3 bg-gray-50 rounded-xl">
-                    <span className="font-medium text-gray-800">UI/UX Design</span>
-                    <span className="text-sm text-gray-600">28 tasks</span>
+                    <span className="font-medium text-gray-800">Network</span>
+                    <span className="text-sm text-gray-600">{getNetworkName()}</span>
                   </div>
                   <div className="flex justify-between items-center p-3 bg-gray-50 rounded-xl">
-                    <span className="font-medium text-gray-800">Data Analysis</span>
-                    <span className="text-sm text-gray-600">19 tasks</span>
+                    <span className="font-medium text-gray-800">Contract</span>
+                    <span className="text-sm text-gray-600">{formatAddress(CONTRACT_ADDRESS)}</span>
                   </div>
                 </div>
               </div>

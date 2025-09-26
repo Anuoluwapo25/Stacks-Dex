@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { ethers } from 'ethers';
+import { ethers, BrowserProvider } from 'ethers';
 
 const useWallet = () => {
   const [account, setAccount] = useState('');
@@ -13,17 +13,17 @@ const useWallet = () => {
   const checkConnection = useCallback(async () => {
     try {
       if (window.ethereum) {
-        const provider = new ethers.providers.Web3Provider(window.ethereum);
+        const provider = new BrowserProvider(window.ethereum);
         const accounts = await provider.listAccounts();
         
         if (accounts.length > 0) {
-          const signer = provider.getSigner();
+          const signer = await provider.getSigner();
           const network = await provider.getNetwork();
           
           setProvider(provider);
           setSigner(signer);
-          setAccount(accounts[0]);
-          setChainId(network.chainId);
+          setAccount(accounts[0].address);
+          setChainId(Number(network.chainId));
           setIsConnected(true);
         }
       }
@@ -44,18 +44,19 @@ const useWallet = () => {
 
       await window.ethereum.request({ method: 'eth_requestAccounts' });
       
-      const provider = new ethers.providers.Web3Provider(window.ethereum);
-      const signer = provider.getSigner();
+      const provider = new BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
       const address = await signer.getAddress();
       const network = await provider.getNetwork();
 
       setProvider(provider);
       setSigner(signer);
       setAccount(address);
-      setChainId(network.chainId);
+      setChainId(Number(network.chainId));
       setIsConnected(true);
 
-      localStorage.setItem('walletConnected', 'true');
+      // Note: localStorage usage removed for Claude.ai compatibility
+      // localStorage.setItem('walletConnected', 'true');
 
     } catch (err) {
       console.error('Error connecting wallet:', err);
@@ -73,7 +74,7 @@ const useWallet = () => {
     setIsConnected(false);
     setChainId(null);
     setError('');
-    localStorage.removeItem('walletConnected');
+    // localStorage.removeItem('walletConnected');
   }, []);
 
   const switchNetwork = useCallback(async (targetChainId) => {
@@ -124,10 +125,9 @@ const useWallet = () => {
   }, [account, disconnectWallet]);
 
   useEffect(() => {
-    const wasConnected = localStorage.getItem('walletConnected') === 'true';
-    if (wasConnected) {
-      checkConnection();
-    }
+    // Auto-reconnection logic would go here if using localStorage
+    // For now, just check connection on mount
+    checkConnection();
   }, [checkConnection]);
 
   const formatAddress = useCallback((address) => {
@@ -138,10 +138,8 @@ const useWallet = () => {
   const getNetworkName = useCallback((chainId) => {
     const networks = {
       1: 'Ethereum Mainnet',
-      3: 'Ropsten Testnet',
-      4: 'Rinkeby Testnet',
+      11155111: 'Sepolia Testnet', // Updated testnet
       5: 'Goerli Testnet',
-      42: 'Kovan Testnet',
       137: 'Polygon Mainnet',
       80001: 'Polygon Mumbai',
       56: 'BSC Mainnet',
